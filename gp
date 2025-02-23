@@ -1,13 +1,16 @@
 import pandas as pd
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine,text
 import logging
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def get_engine(server, database, username, password):
+# SQL Server typically limits the number of parameters to 2100.
+PARAMETER_LIMIT = 2100
+
+def get_engine(server, database):
     engine_url = (
-        f"mssql+pyodbc://{username}:{password}@{server}/{database}"
+        f"mssql+pyodbc://@{server}/{database}"
         "?driver=ODBC+Driver+17+for+SQL+Server"
     )
     try:
@@ -18,69 +21,86 @@ def get_engine(server, database, username, password):
         logging.error(f"Error creating engine for {database} on {server}: {e}")
         raise
 
-def migrate_table(src_engine, dest_engine, src_table, dest_table, batch_size=10000):
+# SQL Server typically limits the number of parameters to 2100.
+PARAMETER_LIMIT = 2100
+
+
+def delete_destination_data(dest_engine, dest_table):
+    """
+    Deletes data from the destination table.
+    """
     try:
-        query = f"SELECT * FROM {src_table}"
-        logging.info(f"Starting migration for {src_table} -> {dest_table}")
+        with dest_engine.begin() as conn:
+            # Use a SQLAlchemy text() query for deletion.
+            # The dest_table should be fully qualified (e.g., "DestSchema.Table1")
+            delete_query = text(f"DELETE FROM {dest_table}")
+            conn.execute(delete_query)
+        logging.info(f"Existing data in {dest_table} deleted successfully.")
+    except Exception as e:
+        logging.error(f"Error deleting data from {dest_table}: {e}")
+        raise
+
+def migrate_table(src_engine, dest_engine, src_table, dest_table, batch_size=20000):
+    query = f"SELECT * FROM {src_table}"
+    logging.info(f"Starting migration for {src_table} -> {dest_table}")
+    
+    try:
         df = pd.read_sql(query, src_engine)
     except Exception as e:
-        logging.error(f"Error reading data from {src_table}: {e}")
+        logging.error(f"Error reading from {src_table}: {e}")
         return
 
     if df.empty:
         logging.warning(f"No data found in {src_table}. Skipping migration.")
         return
-
+    
     try:
-        dest_table_name = dest_table.split('.')[-1]
-        df.to_sql(dest_table_name, dest_engine, if_exists='append', index=False,
-                  method='multi', chunksize=batch_size)
+        delete_destination_data(dest_engine, dest_table)
+    except Exception as e:
+        logging.error(f"Aborting migration for {dest_table} due to delete failure.")
+        return
+
+    num_cols = len(df.columns)
+    safe_batch_size = min(batch_size, max(1, PARAMETER_LIMIT // num_cols))
+    if safe_batch_size < batch_size:
+        logging.info(f"Adjusted batch size to {safe_batch_size} rows (for {num_cols} columns) to comply with SQL Server's parameter limit.")
+    
+    # Parse destination table for schema and table name
+    if '.' in dest_table:
+        schema, table_name = dest_table.split('.', 1)
+    else:
+        table_name = dest_table
+        schema = None
+
+    # Insert data in chunks manually (without using method='multi')
+    try:
+        for i in range(0, len(df), safe_batch_size):
+            df_chunk = df.iloc[i:i+safe_batch_size]
+            df_chunk.to_sql(table_name, dest_engine, schema=schema, if_exists='append', index=False, chunksize=safe_batch_size)
+            logging.info(f"Inserted rows {i} to {i+len(df_chunk)} into {dest_table}.")
         logging.info(f"Successfully migrated {src_table} to {dest_table}.")
     except Exception as e:
-        logging.error(f"Error writing data to {dest_table}: {e}")
+        logging.error(f"Error writing to {dest_table}: {e}")
 
-def migrate_multiple_tables(src_engine, dest_engine, table_mappings, batch_size=10000):
+def migrate_multiple_tables(src_engine, dest_engine, table_mappings, batch_size=20000):
     for src_table, dest_table in table_mappings.items():
-        try:
-            migrate_table(src_engine, dest_engine, src_table, dest_table, batch_size)
-        except Exception as e:
-            logging.error(f"Unexpected error migrating {src_table}: {e}")
+        migrate_table(src_engine, dest_engine, src_table, dest_table, batch_size)
 
 if __name__ == "__main__":
     try:
-        src_engine = get_engine("SourceServer", "SourceDB", "username", "password")
-        dest_engine = get_engine("DestServer", "DestDB", "username", "password")
+        src_engine = get_engine("Vishglory", "DW")
+        dest_engine = get_engine("Vishglory", "Movies")
     except Exception as e:
         logging.critical("Failed to create database engines. Exiting.")
         exit(1)
     
-    # Define mappings between source and destination tables (with different schemas)
     table_mappings = {
-        "SourceSchema.Table1": "DestSchema.Table1",
-        "SourceSchema.Table2": "DestSchema.Table2",
-        "SourceSchema.Table3": "DestSchema.Table3",
-        "SourceSchema.Table4": "DestSchema.Table4",
-        "SourceSchema.Table5": "DestSchema.Table5",
-        "SourceSchema.Table6": "DestSchema.Table6",
-        "SourceSchema.Table7": "DestSchema.Table7",
-        "SourceSchema.Table8": "DestSchema.Table8",
-        "SourceSchema.Table9": "DestSchema.Table9",
-        "SourceSchema.Table10": "DestSchema.Table10",
-        "SourceSchema.Table11": "DestSchema.Table11",
-        "SourceSchema.Table12": "DestSchema.Table12",
-        "SourceSchema.Table13": "DestSchema.Table13",
-        "SourceSchema.Table14": "DestSchema.Table14",
-        "SourceSchema.Table15": "DestSchema.Table15",
-        "SourceSchema.Table16": "DestSchema.Table16",
-        "SourceSchema.Table17": "DestSchema.Table17",
-        "SourceSchema.Table18": "DestSchema.Table18",
-        "SourceSchema.Table19": "DestSchema.Table19",
-        "SourceSchema.Table20": "DestSchema.Table20",
-        "SourceSchema.Table21": "DestSchema.Table21",
-        "SourceSchema.Table22": "DestSchema.Table22",
-        "SourceSchema.Table23": "DestSchema.Table23",
-        "SourceSchema.Table24": "DestSchema.Table24",
-        "SourceSchema.Table25": "DestSchema.Table25",
+        "dbo.Ptest2": "dbo.Ptest2",
+        "dbo.PTest": "dbo.PTest",
+        "dsa.tblEmp": "dsa.tblEmp",
+        "dbo.Ptest4": "dbo.Ptest4",
+        "dbo.Ptest5": "dbo.Ptest5"
+        # Add additional table mappings as needed...
     }
     
     try:
