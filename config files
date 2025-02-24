@@ -54,3 +54,60 @@ with engine.connect() as connection:
     result = connection.execute("SELECT 1")
     for row in result:
         print(row)
+
+##############################################################
+
+import keyring
+
+# Store username and password
+keyring.set_password("my_database_service", "db_username", "your_username")
+keyring.set_password("my_database_service", "db_password", "your_password")
+
+
+import keyring
+from sqlalchemy import create_engine
+
+# Retrieve username and password
+username = keyring.get_password("my_database_service", "db_username")
+password = keyring.get_password("my_database_service", "db_password")
+dsn = "your_dsn"
+
+# Create the connection string using the retrieved credentials
+connection_string = f'mssql+pyodbc://{username}:{password}@{dsn}'
+
+# Create an engine
+engine = create_engine(connection_string)
+
+# Test the connection
+with engine.connect() as connection:
+    result = connection.execute("SELECT 1")
+    for row in result:
+        print(row)
+######################################################################################
+
+import keyring
+from sqlalchemy import create_engine
+
+# Define your DSN and username
+dsn = "YourDSNName"  # Replace with your DSN name
+username = "your_username"  # Replace with your SQL Server username
+
+# Retrieve the password from keyring using a service name (e.g., "SQLServer")
+password = keyring.get_password("SQLServer", username)
+if not password:
+    # Optionally, store the password if it hasn't been set yet.
+    # Uncomment and set your password to store it securely:
+    # keyring.set_password("SQLServer", username, "your_password")
+    raise ValueError("Password not found in keyring for the given username.")
+
+# Create the SQLAlchemy engine using the DSN and credentials
+engine = create_engine(
+    f"mssql+pyodbc://{username}:{password}@{dsn}"
+    "?driver=ODBC+Driver+17+for+SQL+Server;Trusted_Connection=no"
+)
+
+# Test the connection
+with engine.connect() as conn:
+    result = conn.execute("SELECT @@version")
+    for row in result:
+        print("SQL Server version:", row[0])
