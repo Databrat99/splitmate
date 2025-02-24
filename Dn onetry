@@ -1,0 +1,49 @@
+import pyodbc
+
+# Replace with your DSN name, username, and password
+dsn = 'YourDSNName'
+username = 'your_username'
+password = 'your_password'
+
+# Build connection string using DSN
+conn_str = f"DSN={dsn};UID={username};PWD={password}"
+conn = pyodbc.connect(conn_str)
+
+cursor = conn.cursor()
+cursor.execute("SELECT @@version")
+row = cursor.fetchone()
+print("SQL Server version:", row[0])
+
+conn.close()
+
+
+#######################################################################################
+
+from sqlalchemy import create_engine
+
+# Replace with your DSN name; if authentication is handled in the DSN, username/password may not be needed
+dsn = 'YourDSNName'
+engine = create_engine(f"mssql+pyodbc:///?dsn={dsn}")
+
+with engine.connect() as conn:
+    result = conn.execute("SELECT @@version")
+    for row in result:
+        print("SQL Server version:", row[0])
+
+
+
+
+
+
+from sqlalchemy import create_engine
+
+# Replace 'username', 'password', and 'dsnname' with your actual values.
+engine = create_engine(
+    "mssql+pyodbc://username:password@dsnname"
+    "?driver=ODBC+Driver+17+for+SQL+Server;Trusted_Connection=no"
+)
+
+with engine.connect() as conn:
+    result = conn.execute("SELECT @@version")
+    for row in result:
+        print("SQL Server version:", row[0])
