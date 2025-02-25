@@ -21,7 +21,6 @@ tgt_connection_string = (
     'Database=MOVIES;'
     'Trusted_Connection=yes;'
 )
-
 # Create a connection to the source database
 source_db_connection = create_engine(f'mssql+pyodbc:///?odbc_connect={src_connection_string}')
 
@@ -35,16 +34,27 @@ schemas_and_tables = {
 }
 
 # Define the batch size
-batch_size = 10000  # Adjust the batch size as needed
+batch_size = 20000  # Adjust the batch size as needed
 
-# Import data from each table in each schema and write to the destination in batches
+# Step 1: Delete existing data from the destination tables
 for schema, tables in schemas_and_tables.items():
     for table in tables:
-        # Read data from the source table in batches
+        with destination_db_connection.connect() as connection:
+            connection.execute(f"DELETE FROM {schema}.{table};")
+            print(f"Data from {schema}.{table} has been deleted successfully.")
+
+# Step 2: Import data from each table in each schema and write to the destination in batches
+for schema, tables in schemas_and_tables.items():
+    for table in tables:
         offset = 0
         while True:
             # Fetch a batch of data from the source table
-            query = f"SELECT *, getdate() as lastupdate FROM {schema}.{table} ORDER BY (select NULL) OFFSET {offset} ROWS FETCH NEXT {batch_size} ROWS ONLY;"
+            query = f"""
+                SELECT *,getdate() as lastupdate FROM {schema}.{table} 
+                Order By (select NULL)
+                OFFSET {offset} ROWS 
+                FETCH NEXT {batch_size} ROWS ONLY;
+            """
             df = pd.read_sql_query(query, source_db_connection)
 
             # If no more data, break the loop
