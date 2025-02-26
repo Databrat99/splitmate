@@ -1,0 +1,14 @@
+runas /user:Domain\Username "C:\Program Files (x86)\Microsoft SQL Server\150\Tools\Binn\ManagementStudio\Ssms.exe -S MyUserDSN"
+
+
+admin --
+
+@echo off
+setlocal
+set ODBC_ADMIN_PATH=%SystemRoot%\System32\odbcad32.exe
+runas /user:Domain\Username "%ODBC_ADMIN_PATH%"
+endlocal
+
+Locate the batch file you just created (e.g., RunAsODBCAdmin.bat).
+Double-click the batch file to run it.
+Enter the password for the specified user when prompt
