@@ -82,3 +82,23 @@ wher e.employeeid=p.employee od and p.ranking>1)
 
 selete * from employee
 
+----------------------------------------
+df.melt(id_vars=['column1', 'column2'], var_name='variable', value_name='value')
+id_vars: Columns to keep as identifiers (not melted).
+var_name: Name for the new variable column (previously column names).
+value_name: Name for the new value column
+
+import pandas as pd
+
+# Sample Data
+df = pd.DataFrame({
+    'id': [1, 2, 3],
+    'name': ['Alice', 'Bob', 'Charlie'],
+    'math_score': [90, 85, 95],
+    'science_score': [88, 92, 89]
+})
+
+# Melting the DataFrame
+melted_df = df.melt(id_vars=['id', 'name'], var_name='subject', value_name='score')
+
+print(melted_df)
