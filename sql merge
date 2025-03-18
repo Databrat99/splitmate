@@ -32,3 +32,53 @@ WITH CTE AS (
 )
 DELETE FROM table_name 
 WHERE id IN (SELECT id FROM CTE WHERE rn > 1);
+
+
+select * from main m 
+where exists (
+
+select * from child c
+where c.fk=m.pk)
+
+
+
+-- Design Pattern for identifying duplicates (Multi-Column Test)
+SELECT *
+FROM <table to test, sysname,> as main
+WHERE EXISTS (
+	SELECT *	
+	FROM <table to test, sysname,> sub
+	WHERE sub.<column to test 1, sysname,> = main.<column to test 1, sysname,> 
+		AND sub.<column to test 2, sysname,> = main.<column to test 2, sysname,>
+		AND sub.<column to test 3, sysname,> = main.<column to test 3, sysname,> 
+	HAVING COUNT(*) > 1
+)
+ORDER BY <column to test 1, sysname,>, <column to test 2, sysname,>, <column to test 3, sysname,>
+
+
+
+--------------------------
+
+
+
+
+With Dupes as (
+Select First, Lastname, count(8) as No of rows
+from employees
+group by first, last
+having count(*)>1
+)
+, partitined as (
+select Rank() over (partion by e.first, e.last order by e.emp id) as rank
+,e.*
+from employee e join dupes d
+on e.first=d.first
+and e.last=d.last)
+delte employee 
+from employee e 
+where exists (
+select * from partitined p
+wher e.employeeid=p.employee od and p.ranking>1)
+
+selete * from employee
+
