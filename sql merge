@@ -1,0 +1,34 @@
+MERGE INTO target AS t
+USING (
+    SELECT s1.id, s1.name, s2.address, s3.salary, s1.seen_date
+    FROM source1 s1
+    LEFT JOIN source2 s2 ON s1.id = s2.id
+    LEFT JOIN source3 s3 ON s1.id = s3.id
+) AS src
+ON t.id = src.id  -- Matching condition
+
+WHEN MATCHED THEN 
+    UPDATE SET 
+        t.name = src.name,
+        t.address = src.address,
+        t.salary = src.salary,
+        t.first_seen_date = CASE 
+            WHEN t.first_seen_date IS NULL THEN src.seen_date
+            ELSE t.first_seen_date  -- Keep the original first seen date
+        END,
+        t.last_seen_date = src.seen_date  -- Always update to the latest seen date
+
+WHEN NOT MATCHED THEN 
+    INSERT (id, name, address, salary, first_seen_date, last_seen_date)
+    VALUES (src.id, src.name, src.address, src.salary, src.seen_date, src.seen_date);
+
+
+
+
+WITH CTE AS (
+    SELECT *, 
+           ROW_NUMBER() OVER (PARTITION BY id ORDER BY last_seen_date DESC) AS rn
+    FROM table_name
+)
+DELETE FROM table_name 
+WHERE id IN (SELECT id FROM CTE WHERE rn > 1);
