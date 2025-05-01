@@ -1,0 +1,11 @@
+import pandas as pd
+
+# Sample DataFrame
+df = pd.DataFrame({
+    'column': ['apple banana orange', 'cat dog', 'red blue green yellow', '']
+})
+
+# Append the count of strings (split by space) to the original string
+df['column'] = df['column'].apply(lambda x: f"{x} {len(x.split())}" if x else "0")
+
+print(df)
