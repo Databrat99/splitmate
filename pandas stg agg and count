@@ -9,3 +9,92 @@ df = pd.DataFrame({
 df['column'] = df['column'].apply(lambda x: f"{x} {len(x.split())}" if x else "0")
 
 print(df)
+
+
+import pandas as pd
+
+df = pd.DataFrame({
+    'text_column': [
+        'apple orange banana',
+        'apple apple banana',
+        'orange banana',
+        ''
+    ]
+})
+
+# Count occurrences of 'apple' in each cell
+df['apple_count'] = df['text_column'].str.split().apply(lambda x: x.count('apple'))
+
+# Append count to the original string
+df['text_with_count'] = df['text_column'] + ' [apple_count=' + df['apple_count'].astype(str) + ']'
+
+print(df[['text_with_count']])
+
+
+
+df_agg = df.groupby('host')['event'].agg(' '.join).reset_index()
+df_agg = df_agg.rename(columns={'event': 'aggregated_event'})
+
+print(df_agg)
+df_agg = df.groupby('host')['event'].agg(lambda x: ' '.join(set(x))).reset_index()
+df_agg = df.groupby('host')['event'].agg(lambda x: ' '.join(sorted(set(x)))).reset_index()
+
+
+
+import duckdb
+
+con = duckdb.connect()
+
+df = con.execute("""
+WITH
+  raw AS (
+    -- read all CSVs as one table
+    SELECT * FROM read_csv_auto('file1.csv')
+    UNION ALL
+    SELECT * FROM read_csv_auto('file2.csv')
+    UNION ALL
+    SELECT * FROM read_csv_auto('file3.csv')
+  ),
+  dedup AS (
+    -- drop duplicate host/event pairs
+    SELECT DISTINCT host, event
+    FROM raw
+  ),
+  agg AS (
+    -- aggregate sorted, unique events per host
+    SELECT
+      host,
+      string_agg(event, ' ' ORDER BY event) AS all_events
+    FROM dedup
+    GROUP BY host
+  )
+-- final projection: bring in every raw.* column then replace event
+SELECT
+  *      -- includes the original event column
+REPLACE
+  (agg.all_events AS event)
+FROM raw
+LEFT JOIN agg USING(host)
+""").fetchdf()
+
+print(df.head())
+
+
+
+SELECT
+  text_column,
+  -- count words = (# spaces) + 1
+  ((length(text_column)
+    - length(replace(text_column, ' ', ''))
+  ) + 1)           AS word_count,
+  -- append it back
+  text_column
+    || ' [count='
+    || (
+        (length(text_column)
+         - length(replace(text_column, ' ', ''))
+        ) + 1
+       )::VARCHAR
+    || ']'         AS text_with_count
+FROM your_table;
+
