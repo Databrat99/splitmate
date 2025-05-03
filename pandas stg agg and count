@@ -98,3 +98,45 @@ SELECT
     || ']'         AS text_with_count
 FROM your_table;
 
+
+import duckdb
+
+con = duckdb.connect()
+
+df = con.execute("""
+WITH
+  raw AS (
+    -- read all CSVs as one table
+    SELECT * FROM read_csv_auto('file1.csv')
+    UNION ALL
+    SELECT * FROM read_csv_auto('file2.csv')
+    UNION ALL
+    SELECT * FROM read_csv_auto('file3.csv')
+  ),
+  dedup AS (
+    -- drop duplicate host/event/source pairs
+    SELECT DISTINCT host, event, source
+    FROM raw
+  ),
+  agg AS (
+    -- aggregate sorted, unique events and sources per host with distinct values
+    SELECT
+      host,
+      string_agg(DISTINCT event, CHR(10) ORDER BY event) AS all_events,  -- Use CHR(10) for newline as separator
+      string_agg(DISTINCT source, CHR(10) ORDER BY source) AS all_sources  -- Use CHR(10) for newline as separator
+    FROM dedup
+    GROUP BY host
+  )
+-- final projection: select all columns from raw and replace original event and source columns with aggregated values
+SELECT
+  raw.*,  -- Select all columns from raw
+  agg.all_events AS event,  -- Replace original event column with aggregated distinct events
+  agg.all_sources AS source  -- Replace original source column with aggregated distinct sources
+FROM raw
+LEFT JOIN agg USING(host)
+GROUP BY raw.host, raw.event, raw.source, raw.other_column_1, raw.other_column_2  -- Group by all columns to avoid duplicates
+""").fetchdf()
+
+print(df)
+
+
