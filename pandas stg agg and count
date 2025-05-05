@@ -140,3 +140,17 @@ GROUP BY raw.host, raw.event, raw.source, raw.other_column_1, raw.other_column_2
 print(df)
 
 
+df = pd.DataFrame({
+    'column': ['apple banana orange', 'cat dog', 'red blue green yellow', '', 'nodata']
+})
+
+# Append count in parentheses if not empty and not 'nodata'
+def append_count(x):
+    if x.strip().lower() == 'nodata' or x.strip() == '':
+        return x
+    else:
+        return f"{x} ({len(x.split())})"
+
+df['column'] = df['column'].apply(append_count)
+
+print(df)
