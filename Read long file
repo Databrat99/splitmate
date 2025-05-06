@@ -113,4 +113,57 @@ query = """
 joined_df = con.execute(query).fetchdf()
 print(joined_df)
 
+import duckdb
+
+columns_to_agg = [
+    'event_type', 'log_level', 'status', 'error_code',
+    'module_name', 'region', 'source_ip', 'dest_ip',
+    'protocol', 'severity', 'priority', 'category',
+    'user_id', 'device_id', 'app_name', 'action',
+    'policy', 'geo_location', 'service', 'feature'
+]
+
+agg_exprs = ",\n  ".join([
+    f"string_agg(DISTINCT {col}, ', ' ORDER BY {col}) AS {col}_agg"
+    for col in columns_to_agg
+])
+
+replace_exprs = ",\n  ".join([
+    f"{col}_agg AS {col}"
+    for col in columns_to_agg
+])
+
+query = f"""
+WITH
+  raw AS (
+    SELECT * 
+    FROM read_csv_auto('file1.csv')
+    UNION ALL
+    SELECT * FROM read_csv_auto('file2.csv')
+    UNION ALL
+    SELECT * FROM read_csv_auto('file3.csv')
+  ),
+  stats AS (
+    SELECT
+      host,
+      {agg_exprs}
+    FROM raw
+    GROUP BY host
+  )
+SELECT
+  raw.*
+REPLACE
+  (
+    {replace_exprs}
+  )
+FROM raw
+LEFT JOIN stats USING(host)
+"""
+
+con = duckdb.connect()
+
+df = con.execute(query).fetchdf()
+
+print(df.head())
+
 
