@@ -234,3 +234,62 @@ df_duck = duckdb.query("SELECT * FROM df_sql WHERE column > 100").to_df()
 print(df_duck.head())
 
 
+DECLARE @Columns NVARCHAR(MAX);
+DECLARE @DistinctN_N1Counts NVARCHAR(MAX);
+DECLARE @DistinctNPatternCounts NVARCHAR(MAX);
+DECLARE @GrandTotalCounts NVARCHAR(MAX);
+DECLARE @SQL NVARCHAR(MAX);
+
+-- Dynamically build COUNT DISTINCT CASE WHEN col IN ('N','N-1') for each column
+SELECT @DistinctN_N1Counts = STUFF((
+    SELECT ', COUNT(DISTINCT CASE WHEN ' + QUOTENAME(column_name) + ' IN (''N'',''N-1'') THEN ' + QUOTENAME(column_name) + ' END)'
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE table_name = 'YourTable'
+    FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 2, '');
+
+-- Dynamically build COUNT DISTINCT CASE WHEN col LIKE 'N%' for each column
+SELECT @DistinctNPatternCounts = STUFF((
+    SELECT ', COUNT(DISTINCT CASE WHEN ' + QUOTENAME(column_name) + ' LIKE ''N%'' THEN ' + QUOTENAME(column_name) + ' END)'
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE table_name = 'YourTable'
+    FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 2, '');
+
+-- Dynamically build COUNT (no DISTINCT) for GrandTotal for each column
+SELECT @GrandTotalCounts = STUFF((
+    SELECT ', COUNT(CASE WHEN ' + QUOTENAME(column_name) + ' IS NOT NULL THEN ' + QUOTENAME(column_name) + ' END)'
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE table_name = 'YourTable'
+    FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 2, '');
+
+-- Dynamically build SELECT * column list
+SELECT @Columns = STUFF((
+    SELECT ', ' + QUOTENAME(column_name)
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE table_name = 'YourTable'
+    FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 2, '');
+
+-- Build final dynamic SQL
+SET @SQL = '
+    SELECT ' + @Columns + ', NULL AS GrandTotal
+    FROM YourTable
+
+    UNION ALL
+
+    SELECT ''Distinct N,N-1'' AS ID, ' + @DistinctN_N1Counts + ', NULL AS GrandTotal
+    FROM YourTable
+
+    UNION ALL
+
+    SELECT ''Distinct N+Pattern'' AS ID, ' + @DistinctNPatternCounts + ', NULL AS GrandTotal
+    FROM YourTable
+
+    UNION ALL
+
+    SELECT ''GrandTotal'' AS ID, ' + @GrandTotalCounts + ', NULL AS GrandTotal
+    FROM YourTable;
+';
+
+-- Execute dynamic SQL
+EXEC sp_executesql @SQL;
+
+
