@@ -218,3 +218,19 @@ with duckdb.connect() as con:
 
 print(df.head())
 
+import pandas as pd
+import duckdb
+import pyodbc
+
+# Connect to SQL Server
+conn = pyodbc.connect('DRIVER={SQL Server};SERVER=server_name;DATABASE=db_name;UID=user;PWD=password')
+
+# Load table to pandas
+df_sql = pd.read_sql("SELECT * FROM mytable", conn)
+
+# Query using DuckDB
+df_duck = duckdb.query("SELECT * FROM df_sql WHERE column > 100").to_df()
+
+print(df_duck.head())
+
+
