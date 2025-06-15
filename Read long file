@@ -1,0 +1,295 @@
+import duckdb
+
+# Connect to an in-memory DuckDB database
+con = duckdb.connect()
+
+# Read and preview the CSV file
+df = con.execute("SELECT * FROM 'your_file.csv'").fetchdf()
+
+# Optional: See the first few rows
+print(df.head())
+
+CREATE TABLE my_table AS SELECT * FROM 'your_file.csv';
+SELECT COUNT(*) FROM my_table;
+
+
+import pandas as pd
+
+# Read in chunks to avoid memory issues
+chunk_size = 100000  # adjust based on your RAM
+chunks = pd.read_csv('your_file.csv', chunksize=chunk_size)
+
+for chunk in chunks:
+    print(chunk.head())  # process each chunk
+
+
+import dask.dataframe as dd
+df = dd.read_csv('your_file.csv')
+print(df.head())
+
+
+
+✅ 1. File Path Is Incorrect
+DuckDB won’t raise a clear error if the file doesn’t exist—it just silently returns no rows.
+
+Check:
+
+python
+Copy
+Edit
+import os
+print(os.path.exists('your_file.csv'))  # Should be True
+
+
+Header Row Missing or Misread
+
+df = duckdb.query("SELECT * FROM read_csv_auto('your_file.csv', header=True)").to_df()
+
+Columns Have Unexpected Names
+df = duckdb.query("SELECT * FROM 'your_file.csv' LIMIT 1").to_df()
+print(df.columns)
+
+
+import pandas as pd
+
+# Set display to show all columns
+pd.set_option('display.max_columns', None)
+
+# Optional: Show all rows too (if needed)
+# pd.set_option('display.max_rows', None)
+
+# Example: Load a large CSV and display all columns
+df = pd.read_csv('your_file.csv')
+print(df.head())
+
+pd.reset_option('display.max_columns')
+pd.set_option('display.width', 0) 
+
+
+chunks = pd.read_csv('your_file.csv', chunksize=100_000, low_memory=False)
+
+results = []
+for chunk in chunks:
+    results.append(process_chunk(chunk))  # Define your own function
+final_df = pd.concat(results)
+
+
+
+import duckdb
+
+# Connect to an in-memory DuckDB database
+con = duckdb.connect()
+
+# Execute SQL query on the CSV file (without loading it into memory)
+df = con.execute("SELECT * FROM 'your_file.csv' LIMIT 10").fetchdf()
+
+# Print the first 10 rows of the file
+print(df)
+# Query to select rows where the 'amount' column is greater than 1000
+query = """
+    SELECT *
+    FROM 'your_file.csv'
+    WHERE amount > 1000
+    LIMIT 10
+"""
+filtered_df = con.execute(query).fetchdf()
+print(filtered_df)
+# Query to join two CSV files (for example, 'file1.csv' and 'file2.csv')
+query = """
+    SELECT *
+    FROM 'file1.csv' AS f1
+    JOIN 'file2.csv' AS f2
+    ON f1.id = f2.id
+"""
+joined_df = con.execute(query).fetchdf()
+print(joined_df)
+query = """
+    SELECT f1.column1, f1.column2, f2.column3
+    FROM 'file1.csv' AS f1
+    JOIN 'file2.csv' AS f2
+    ON f1.id = f2.id
+    LIMIT 10
+"""
+joined_df = con.execute(query).fetchdf()
+print(joined_df)
+
+import duckdb
+
+columns_to_agg = [
+    'event_type', 'log_level', 'status', 'error_code',
+    'module_name', 'region', 'source_ip', 'dest_ip',
+    'protocol', 'severity', 'priority', 'category',
+    'user_id', 'device_id', 'app_name', 'action',
+    'policy', 'geo_location', 'service', 'feature'
+]
+
+agg_exprs = ",\n  ".join([
+    f"string_agg(DISTINCT {col}, ', ' ORDER BY {col}) AS {col}_agg"
+    for col in columns_to_agg
+])
+
+replace_exprs = ",\n  ".join([
+    f"{col}_agg AS {col}"
+    for col in columns_to_agg
+])
+
+query = f"""
+WITH
+  raw AS (
+    SELECT * 
+    FROM read_csv_auto('file1.csv')
+    UNION ALL
+    SELECT * FROM read_csv_auto('file2.csv')
+    UNION ALL
+    SELECT * FROM read_csv_auto('file3.csv')
+  ),
+  stats AS (
+    SELECT
+      host,
+      {agg_exprs}
+    FROM raw
+    GROUP BY host
+  )
+SELECT
+  raw.*
+REPLACE
+  (
+    {replace_exprs}
+  )
+FROM raw
+LEFT JOIN stats USING(host)
+"""
+
+con = duckdb.connect()
+
+df = con.execute(query).fetchdf()
+
+print(df.head())
+
+import duckdb
+
+columns_to_agg = [
+    'event_type', 'log_level', 'status', 'error_code',
+    'module_name', 'region', 'source_ip', 'dest_ip',
+    'protocol', 'severity', 'priority', 'category',
+    'user_id', 'device_id', 'app_name', 'action',
+    'policy', 'geo_location', 'service', 'feature'
+]
+
+agg_exprs = ",\n  ".join([
+    f"string_agg(DISTINCT {col}, CHR(10) ORDER BY {col}) AS {col}_agg"
+    for col in columns_to_agg
+])
+
+replace_exprs = ",\n  ".join([
+    f"{col}_agg AS {col}"
+    for col in columns_to_agg
+])
+
+query = f"""
+WITH
+  raw AS (
+    SELECT * 
+    FROM read_csv_auto('file1.csv')
+    UNION ALL
+    SELECT * FROM read_csv_auto('file2.csv')
+    UNION ALL
+    SELECT * FROM read_csv_auto('file3.csv')
+  ),
+  stats AS (
+    SELECT
+      host,
+      {agg_exprs}
+    FROM raw
+    GROUP BY host
+  )
+SELECT
+  raw.*
+REPLACE
+  (
+    {replace_exprs}
+  )
+FROM raw
+LEFT JOIN stats USING(host)
+"""
+
+with duckdb.connect() as con:
+    df = con.execute(query).fetchdf()
+
+print(df.head())
+
+import pandas as pd
+import duckdb
+import pyodbc
+
+# Connect to SQL Server
+conn = pyodbc.connect('DRIVER={SQL Server};SERVER=server_name;DATABASE=db_name;UID=user;PWD=password')
+
+# Load table to pandas
+df_sql = pd.read_sql("SELECT * FROM mytable", conn)
+
+# Query using DuckDB
+df_duck = duckdb.query("SELECT * FROM df_sql WHERE column > 100").to_df()
+
+print(df_duck.head())
+
+
+DECLARE @Columns NVARCHAR(MAX);
+DECLARE @DistinctN_N1Counts NVARCHAR(MAX);
+DECLARE @DistinctNPatternCounts NVARCHAR(MAX);
+DECLARE @GrandTotalCounts NVARCHAR(MAX);
+DECLARE @SQL NVARCHAR(MAX);
+
+-- Dynamically build COUNT DISTINCT CASE WHEN col IN ('N','N-1') for each column
+SELECT @DistinctN_N1Counts = STUFF((
+    SELECT ', COUNT(DISTINCT CASE WHEN ' + QUOTENAME(column_name) + ' IN (''N'',''N-1'') THEN ' + QUOTENAME(column_name) + ' END)'
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE table_name = 'YourTable'
+    FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 2, '');
+
+-- Dynamically build COUNT DISTINCT CASE WHEN col LIKE 'N%' for each column
+SELECT @DistinctNPatternCounts = STUFF((
+    SELECT ', COUNT(DISTINCT CASE WHEN ' + QUOTENAME(column_name) + ' LIKE ''N%'' THEN ' + QUOTENAME(column_name) + ' END)'
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE table_name = 'YourTable'
+    FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 2, '');
+
+-- Dynamically build COUNT (no DISTINCT) for GrandTotal for each column
+SELECT @GrandTotalCounts = STUFF((
+    SELECT ', COUNT(CASE WHEN ' + QUOTENAME(column_name) + ' IS NOT NULL THEN ' + QUOTENAME(column_name) + ' END)'
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE table_name = 'YourTable'
+    FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 2, '');
+
+-- Dynamically build SELECT * column list
+SELECT @Columns = STUFF((
+    SELECT ', ' + QUOTENAME(column_name)
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE table_name = 'YourTable'
+    FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 2, '');
+
+-- Build final dynamic SQL
+SET @SQL = '
+    SELECT ' + @Columns + ', NULL AS GrandTotal
+    FROM YourTable
+
+    UNION ALL
+
+    SELECT ''Distinct N,N-1'' AS ID, ' + @DistinctN_N1Counts + ', NULL AS GrandTotal
+    FROM YourTable
+
+    UNION ALL
+
+    SELECT ''Distinct N+Pattern'' AS ID, ' + @DistinctNPatternCounts + ', NULL AS GrandTotal
+    FROM YourTable
+
+    UNION ALL
+
+    SELECT ''GrandTotal'' AS ID, ' + @GrandTotalCounts + ', NULL AS GrandTotal
+    FROM YourTable;
+';
+
+-- Execute dynamic SQL
+EXEC sp_executesql @SQL;
+
+

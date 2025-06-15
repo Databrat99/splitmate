@@ -1,0 +1,56 @@
+from sqlalchemy import create_engine
+
+# Define the DSN name
+dsn_name = 'your_dsn_name'  # The name of your DSN
+
+# Create the connection string
+conn_string = f'mssql+pyodbc://@{dsn_name}'
+
+# Create the SQLAlchemy engine
+engine = create_engine(conn_string)
+
+# Test the connection by executing a simple query
+with engine.connect() as connection:
+    result = connection.execute("SELECT @@VERSION;")
+    for row in result:
+        print(row[0])
+
+# No need to explicitly close the connection, as `with` statement handles it
+
+
+
+from sqlalchemy import create_engine
+
+# Define the DSN name
+dsn_name = 'your_dsn_name'  # The name of your DSN
+user = 'your_service_id'    # Your service ID or username
+password = 'your_password'  # Your password
+
+# Create the connection string
+conn_string = (
+    f'mssql+pyodbc://{user}:{password}@{dsn_name}'
+)
+
+# Create the SQLAlchemy engine
+engine = create_engine(conn_string)
+
+# Test the connection by executing a simple query
+with engine.connect() as connection:
+    result = connection.execute("SELECT @@VERSION;")
+    for row in result:
+        print(row[0])
+
+# No need to explicitly close the connection, as `with` statement handles it
+DECLARE @FirstDayOfWeek DATETIME = DATEADD(DAY, 1 - @CurrentDayOfWeek, @Timestamp);
+SET @FirstDayOfWeek = DATEADD(HOUR, -DATEPART(HOUR, @FirstDayOfWeek), @FirstDayOfWeek);
+SET @FirstDayOfWeek = DATEADD(MINUTE, -DATEPART(MINUTE, @FirstDayOfWeek), @FirstDayOfWeek);
+SET @FirstDayOfWeek = DATEADD(SECOND, -DATEPART(SECOND, @FirstDayOfWeek), @FirstDayOfWeek);
+
+-- Calculate the last day of the week with time set to 23:59:59
+DECLARE @LastDayOfWeek DATETIME = DATEADD(DAY, 7 - @CurrentDayOfWeek, @Timestamp);
+SET @LastDayOfWeek = DATEADD(HOUR, 23 - DATEPART(HOUR, @LastDayOfWeek), @LastDayOfWeek);
+SET @LastDayOfWeek = DATEADD(MINUTE, 59 - DATEPART(MINUTE, @LastDayOfWeek), @LastDayOfWeek);
+SET @LastDayOfWeek = DATEADD(SECOND, 59 - DATEPART(SECOND, @LastDayOfWeek), @LastDayOfWeek);
+
+SELECT @FirstDayOfWeek AS FirstDayOfWeek, @LastDayOfWeek AS LastDayOfWeek;
+

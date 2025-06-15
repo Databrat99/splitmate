@@ -1,0 +1,44 @@
+from sqlalchemy import create_engine
+import pandas as pd
+
+# Define source and target database connection strings
+source_conn_string = "mssql+pyodbc://username:password@source_database"
+target_conn_string = "mssql+pyodbc://username:password@target_database"
+
+
+# Create SQLAlchemy engines
+source_engine = sal.create_engine('mssql://Vishglory/DW?driver=ODBC+DRIVER+17+FOR+SQL+SERVER')
+target_engine = sal.create_engine('mssql://Vishglory/MOVIES?driver=ODBC+DRIVER+17+FOR+SQL+SERVER')
+
+
+
+
+# Define source and target schemas and tables
+source_tables = [
+    {'schema': 'dsa', 'table': 'tblEmp'},
+    {'schema': 'dsa', 'table': 'tblstudent'},
+    # Add more source schema/table pairs here
+]
+
+target_tables = [
+     {'schema': 'dsa', 'table': 'tblEmp'},
+    {'schema': 'dsa', 'table': 'tblstudent'},
+    # Add more target schema/table pairs here
+]
+
+# Function to transfer data from source to target
+def transfer_data(source_engine, target_engine, source_schema, source_table, target_schema, target_table):
+    query = f"SELECT * FROM {source_schema}.{source_table}"
+    df = pd.read_sql(query, source_engine)
+    df.to_sql(target_table, target_engine, schema=target_schema, if_exists='replace', index=False)
+    print(f"Data transferred from {source_schema}.{source_table} to {target_schema}.{target_table}")
+
+# Transfer data for all tables
+for source, target in zip(source_tables, target_tables):
+    transfer_data(
+        source_engine, target_engine,
+        source['schema'], source['table'],
+        target['schema'], target['table']
+    )
+
+print("Data transferred successfully!")

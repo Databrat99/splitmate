@@ -1,0 +1,156 @@
+import pandas as pd
+
+# Sample DataFrame
+df = pd.DataFrame({
+    'column': ['apple banana orange', 'cat dog', 'red blue green yellow', '']
+})
+
+# Append the count of strings (split by space) to the original string
+df['column'] = df['column'].apply(lambda x: f"{x} {len(x.split())}" if x else "0")
+
+print(df)
+
+
+import pandas as pd
+
+df = pd.DataFrame({
+    'text_column': [
+        'apple orange banana',
+        'apple apple banana',
+        'orange banana',
+        ''
+    ]
+})
+
+# Count occurrences of 'apple' in each cell
+df['apple_count'] = df['text_column'].str.split().apply(lambda x: x.count('apple'))
+
+# Append count to the original string
+df['text_with_count'] = df['text_column'] + ' [apple_count=' + df['apple_count'].astype(str) + ']'
+
+print(df[['text_with_count']])
+
+
+
+df_agg = df.groupby('host')['event'].agg(' '.join).reset_index()
+df_agg = df_agg.rename(columns={'event': 'aggregated_event'})
+
+print(df_agg)
+df_agg = df.groupby('host')['event'].agg(lambda x: ' '.join(set(x))).reset_index()
+df_agg = df.groupby('host')['event'].agg(lambda x: ' '.join(sorted(set(x)))).reset_index()
+
+
+
+import duckdb
+
+con = duckdb.connect()
+
+df = con.execute("""
+WITH
+  raw AS (
+    -- read all CSVs as one table
+    SELECT * FROM read_csv_auto('file1.csv')
+    UNION ALL
+    SELECT * FROM read_csv_auto('file2.csv')
+    UNION ALL
+    SELECT * FROM read_csv_auto('file3.csv')
+  ),
+  dedup AS (
+    -- drop duplicate host/event pairs
+    SELECT DISTINCT host, event
+    FROM raw
+  ),
+  agg AS (
+    -- aggregate sorted, unique events per host
+    SELECT
+      host,
+      string_agg(event, ' ' ORDER BY event) AS all_events
+    FROM dedup
+    GROUP BY host
+  )
+-- final projection: bring in every raw.* column then replace event
+SELECT
+  *      -- includes the original event column
+REPLACE
+  (agg.all_events AS event)
+FROM raw
+LEFT JOIN agg USING(host)
+""").fetchdf()
+
+print(df.head())
+
+
+
+SELECT
+  text_column,
+  -- count words = (# spaces) + 1
+  ((length(text_column)
+    - length(replace(text_column, ' ', ''))
+  ) + 1)           AS word_count,
+  -- append it back
+  text_column
+    || ' [count='
+    || (
+        (length(text_column)
+         - length(replace(text_column, ' ', ''))
+        ) + 1
+       )::VARCHAR
+    || ']'         AS text_with_count
+FROM your_table;
+
+
+import duckdb
+
+con = duckdb.connect()
+
+df = con.execute("""
+WITH
+  raw AS (
+    -- read all CSVs as one table
+    SELECT * FROM read_csv_auto('file1.csv')
+    UNION ALL
+    SELECT * FROM read_csv_auto('file2.csv')
+    UNION ALL
+    SELECT * FROM read_csv_auto('file3.csv')
+  ),
+  dedup AS (
+    -- drop duplicate host/event/source pairs
+    SELECT DISTINCT host, event, source
+    FROM raw
+  ),
+  agg AS (
+    -- aggregate sorted, unique events and sources per host with distinct values
+    SELECT
+      host,
+      string_agg(DISTINCT event, CHR(10) ORDER BY event) AS all_events,  -- Use CHR(10) for newline as separator
+      string_agg(DISTINCT source, CHR(10) ORDER BY source) AS all_sources  -- Use CHR(10) for newline as separator
+    FROM dedup
+    GROUP BY host
+  )
+-- final projection: select all columns from raw and replace original event and source columns with aggregated values
+SELECT
+  raw.*,  -- Select all columns from raw
+  agg.all_events AS event,  -- Replace original event column with aggregated distinct events
+  agg.all_sources AS source  -- Replace original source column with aggregated distinct sources
+FROM raw
+LEFT JOIN agg USING(host)
+GROUP BY raw.host, raw.event, raw.source, raw.other_column_1, raw.other_column_2  -- Group by all columns to avoid duplicates
+""").fetchdf()
+
+print(df)
+
+
+df = pd.DataFrame({
+    'column': ['apple banana orange', 'cat dog', 'red blue green yellow', '', 'nodata']
+})
+
+# Append count in parentheses if not empty and not 'nodata'
+def append_count(x):
+    if x.strip().lower() == 'nodata' or x.strip() == '':
+        return x
+    else:
+        return f"{x} ({len(x.split())})"
+
+df['column'] = df['column'].apply(append_count)
+
+print(df)

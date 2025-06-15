@@ -1,0 +1,79 @@
+destination_db_connection = create_engine(f'mssql+pyodbc:///?odbc_connect={tgt_connection_string}')
+import pandas as pd
+from sqlalchemy import create_engine
+import pyodbc
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# Define the connection string for SQL Server
+src_connection_string = (
+    'Driver={ODBC Driver 17 for SQL Server};'
+    'Server=Vishglory;'
+    'Database=DW;'
+    'Trusted_Connection=yes;'
+)
+
+
+tgt_connection_string = (
+    'Driver={ODBC Driver 17 for SQL Server};'
+    'Server=Vishglory;'
+    'Database=MOVIES;'
+    'Trusted_Connection=yes;'
+)
+
+# Create a connection to the source database
+source_db_connection = create_engine(f'mssql+pyodbc:///?odbc_connect={src_connection_string}')
+
+# Create a connection to the destination database
+destination_db_connection = create_engine(f'mssql+pyodbc:///?odbc_connect={tgt_connection_string}')
+
+# List of schemas and tables to be imported
+schemas_and_tables = {
+    'dbo': ['PTest','ptest2','ptest3','ptest4','ptest5'],
+    'dsa': ['tblEmp', 'tblstudent']
+}
+
+# Define the batch size
+batch_size = 20000  # Adjust the batch size as needed
+
+def delete_data(schema, table):
+    with destination_db_connection.connect() as connection:
+        connection.execute(f"DELETE FROM {schema}.{table};")
+        print(f"Data from {schema}.{table} has been deleted successfully.")
+
+def import_data(schema, table):
+    offset = 0
+    while True:
+        # Fetch a batch of data from the source table
+        query = f"""
+            SELECT * FROM {schema}.{table} 
+            ORDER BY 1
+            OFFSET {offset} ROWS 
+            FETCH NEXT {batch_size} ROWS ONLY;
+        """
+        df = pd.read_sql_query(query, source_db_connection)
+
+        # If no more data, break the loop
+        if df.empty:
+            break
+
+        # Write the batch of data to the destination table
+        df.to_sql(table, destination_db_connection, schema=schema, if_exists='append', index=False)
+
+        print(f"Batch of data from {schema}.{table} has been imported successfully.")
+
+        # Update the offset for the next batch
+        offset += batch_size
+
+# Step 1: Delete existing data from the destination tables in parallel
+with ThreadPoolExecutor() as executor:
+    delete_tasks = [executor.submit(delete_data, schema, table) for schema, tables in schemas_and_tables.items() for table in tables]
+    for task in as_completed(delete_tasks):
+        task.result()
+
+# Step 2: Import data from each table in each schema in parallel
+with ThreadPoolExecutor() as executor:
+    import_tasks = [executor.submit(import_data, schema, table) for schema, tables in schemas_and_tables.items() for table in tables]
+    for task in as_completed(import_tasks):
+        task.result()
+
+print("All data has been imported successfully.")

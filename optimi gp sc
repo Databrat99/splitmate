@@ -1,0 +1,125 @@
+import pandas as pd
+import keyring
+import os
+from sqlalchemy import create_engine, text
+from tqdm import tqdm
+import concurrent.futures
+
+# Configuration
+SOURCE_DSN = "SourceDSN"  # DSN for source database (Using Keyring for Credentials)
+TARGET_DSN = "TargetDSN"  # Normal DSN for target database
+
+# Keyring Service Name (For Secure Credential Storage)
+KEYRING_SERVICE = "SourceSQLServer"
+
+# Table Mapping {source_schema.source_table : target_schema.target_table}
+TABLE_MAPPINGS = {
+    "Schema1.Table1": "TargetSchema.Table1",
+    "Schema1.Table2": "TargetSchema.Table2",
+    "Schema2.Table3": "TargetSchema.Table3",
+    "Schema2.Table4": "TargetSchema.Table4",
+}
+
+CHUNKSIZE = 50000  # Batch size for processing
+MAX_WORKERS = 5  # Number of parallel threads
+
+# Database connection functions
+def get_source_engine():
+    """Creates and returns a SQLAlchemy engine for the source database using keyring credentials."""
+    try:
+        username = keyring.get_password(KEYRING_SERVICE, "username")
+        password = keyring.get_password(KEYRING_SERVICE, "password")
+
+        if not username or not password:
+            raise ValueError("Source database credentials not found in keyring. Please set them first.")
+
+        engine = create_engine(
+            f"mssql+pyodbc://{username}:{password}@{SOURCE_DSN}",
+            connect_args={'fast_executemany': True}
+        )
+        print("Connected to Source Database Successfully")
+        return engine
+    except Exception as e:
+        print(f"Error connecting to Source Database: {e}")
+        return None
+
+def get_target_engine():
+    """Creates and returns a SQLAlchemy engine for the target database using a normal DSN."""
+    try:
+        engine = create_engine(
+            f"mssql+pyodbc:///?dsn={TARGET_DSN}",
+            connect_args={'fast_executemany': True}
+        )
+        print("Connected to Target Database Successfully")
+        return engine
+    except Exception as e:
+        print(f"Error connecting to Target Database: {e}")
+        return None
+
+# Function to delete target table data
+def delete_target_data(target_engine, target_table):
+    """Deletes existing data from the target table before inserting new data."""
+    try:
+        print(f"Deleting data from {target_table}...")
+        delete_sql = f"DELETE FROM {target_table};"
+        with target_engine.begin() as conn:
+            conn.execute(text(delete_sql))
+        print(f"Data deleted from {target_table}.")
+    except Exception as e:
+        print(f"Error deleting data from {target_table}: {e}")
+
+# Function to migrate data from source to target
+def migrate_data(source_engine, target_engine, source_table, target_table):
+    """Extracts data from source table, processes in chunks, and inserts into target table."""
+    try:
+        print(f"Extracting & Importing data from {source_table} to {target_table} in chunks of {CHUNKSIZE} rows...")
+        
+        query = f"SELECT * FROM {source_table}"
+        total_rows = 0
+
+        for chunk in tqdm(pd.read_sql(query, source_engine, chunksize=CHUNKSIZE), desc=f"Processing {source_table}"):
+            chunk.to_sql(target_table.split('.')[-1], target_engine, schema=target_table.split('.')[0], 
+                         if_exists='append', index=False, method='multi', chunksize=CHUNKSIZE)
+            total_rows += len(chunk)
+
+        print(f"Migration completed for {source_table} → {target_table} | Total Rows: {total_rows}")
+    except Exception as e:
+        print(f"Error migrating {source_table} to {target_table}: {e}")
+
+# Main function to handle migration
+def main():
+    # Establish connections
+    source_engine = get_source_engine()
+    target_engine = get_target_engine()
+
+    if not source_engine or not target_engine:
+        print("Exiting due to database connection issues.")
+        return
+
+    try:
+        # Delete existing target data before inserting new data
+        with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = []
+            for _, target_table in TABLE_MAPPINGS.items():
+                futures.append(executor.submit(delete_target_data, target_engine, target_table))
+            for future in concurrent.futures.as_completed(futures):
+                future.result()
+
+        # Migrate data from source to target in parallel
+        with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = []
+            for source_table, target_table in TABLE_MAPPINGS.items():
+                futures.append(executor.submit(migrate_data, source_engine, target_engine, source_table, target_table))
+            
+            for future in concurrent.futures.as_completed(futures):
+                future.result()
+    
+    finally:
+        # Close connections
+        print("Closing database connections...")
+        source_engine.dispose()
+        target_engine.dispose()
+        print("Database connections closed successfully.")
+
+if __name__ == "__main__":
+    main()

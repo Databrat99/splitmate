@@ -1,0 +1,112 @@
+DECLARE @columns NVARCHAR(MAX), @otherColumns NVARCHAR(MAX), @sql NVARCHAR(MAX);
+
+-- Step 1: Get dynamic software column list (excluding Host, Location, Department)
+SELECT @columns = STRING_AGG(QUOTENAME(Software), ',')
+FROM (
+    SELECT DISTINCT name AS Software FROM sys.columns 
+    WHERE object_id = OBJECT_ID('SoftwareInventory') 
+    AND name NOT IN ('Host', 'Location', 'Department')
+) AS SoftwareList;
+
+-- Step 2: Get additional columns (besides Host)
+SELECT @otherColumns = STRING_AGG(QUOTENAME(ColumnName), ', ')
+FROM (
+    SELECT DISTINCT name AS ColumnName FROM sys.columns 
+    WHERE object_id = OBJECT_ID('SoftwareInventory') 
+    AND name IN ('Host', 'Location', 'Department')
+) AS ColumnList;
+
+-- Step 3: Build dynamic SQL
+SET @sql = '
+WITH Unpivoted AS (
+    SELECT Host, Location, Software
+    FROM 
+        (SELECT * FROM SoftwareInventory) AS SourceTable
+    UNPIVOT (
+        Installed FOR Software IN (' + @columns + ')
+    ) AS UnpivotTable
+    WHERE Installed IS NOT NULL  -- Ignore NULLs
+),
+SoftwareCounts AS (
+    SELECT 
+        Location, 
+        Software,
+        COUNT(DISTINCT Host) OVER (PARTITION BY Location, Software) AS HostCountPerLocation,
+        COUNT(DISTINCT Host) OVER (PARTITION BY Software) AS TotalHostCount
+    FROM Unpivoted
+)
+-- Select original data
+SELECT * FROM SoftwareInventory
+UNION ALL
+-- Total per Location
+SELECT ''Total per Location ('' + Location + '')'', NULL, NULL, ' + 
+    STRING_AGG('MAX(CASE WHEN Software = ' + QUOTENAME(Software, '''') + ' THEN HostCountPerLocation ELSE NULL END)', ', ') + '
+FROM SoftwareCounts
+GROUP BY Location
+UNION ALL
+-- Total Count row
+SELECT ''Total Count'', NULL, NULL, ' + 
+    STRING_AGG('MAX(CASE WHEN Software = ' + QUOTENAME(Software, '''') + ' THEN TotalHostCount ELSE NULL END)', ', ') + '
+FROM SoftwareCounts;
+';
+
+-- Step 4: Execute the dynamic SQL
+EXEC sp_executesql @sql;
+
+_________________________________________
+
+DECLARE @columns NVARCHAR(MAX), @sql NVARCHAR(MAX);
+
+-- Step 1: Get dynamic software column list (excluding Host, Location, Department)
+SELECT @columns = STRING_AGG(QUOTENAME(Software), ',')
+FROM (
+    SELECT DISTINCT name AS Software FROM sys.columns 
+    WHERE object_id = OBJECT_ID('SoftwareInventory') 
+    AND name NOT IN ('Host', 'Location', 'Department')
+) AS SoftwareList;
+
+-- Step 2: Build dynamic SQL
+SET @sql = '
+WITH Unpivoted AS (
+    SELECT Host, Location, Department, Software
+    FROM 
+        (SELECT * FROM SoftwareInventory) AS SourceTable
+    UNPIVOT (
+        Installed FOR Software IN (' + @columns + ')
+    ) AS UnpivotTable
+    WHERE Installed IS NOT NULL  -- Ignore NULLs
+),
+SoftwareCounts AS (
+    SELECT 
+        Location, 
+        Department,
+        Software,
+        COUNT(DISTINCT Host) OVER (PARTITION BY Location, Software) AS HostCountPerLocation,
+        COUNT(DISTINCT Host) OVER (PARTITION BY Department, Software) AS HostCountPerDepartment,
+        COUNT(DISTINCT Host) OVER (PARTITION BY Software) AS TotalHostCount
+    FROM Unpivoted
+)
+-- Select original data
+SELECT * FROM SoftwareInventory
+UNION ALL
+-- Total per Location
+SELECT ''Total per Location ('' + Location + '')'', NULL, NULL, ' + 
+    STRING_AGG('MAX(CASE WHEN Software = ' + QUOTENAME(Software, '''') + ' THEN HostCountPerLocation ELSE NULL END)', ', ') + '
+FROM SoftwareCounts
+GROUP BY Location
+UNION ALL
+-- Total per Department
+SELECT ''Total per Department ('' + Department + '')'', NULL, NULL, ' + 
+    STRING_AGG('MAX(CASE WHEN Software = ' + QUOTENAME(Software, '''') + ' THEN HostCountPerDepartment ELSE NULL END)', ', ') + '
+FROM SoftwareCounts
+GROUP BY Department
+UNION ALL
+-- Total Count row
+SELECT ''Total Count'', NULL, NULL, ' + 
+    STRING_AGG('MAX(CASE WHEN Software = ' + QUOTENAME(Software, '''') + ' THEN TotalHostCount ELSE NULL END)', ', ') + '
+FROM SoftwareCounts;
+';
+
+-- Step 3: Execute the dynamic SQL
+EXEC sp_executesql @sql;
+

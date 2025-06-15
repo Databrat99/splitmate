@@ -1,0 +1,47 @@
+runas /user:Domain\Username "C:\Program Files (x86)\Microsoft SQL Server\150\Tools\Binn\ManagementStudio\Ssms.exe -S MyUserDSN"
+
+
+admin --
+
+@echo off
+setlocal
+set ODBC_ADMIN_PATH=%SystemRoot%\System32\odbcad32.exe
+runas /user:Domain\Username "%ODBC_ADMIN_PATH%"
+endlocal
+
+Locate the batch file you just created (e.g., RunAsODBCAdmin.bat).
+Double-click the batch file to run it.
+Enter the password for the specified user when prompt
+
+
+
+MAX_WORKERS = min(CPU_CORES * 2, 10)
+If you have 4 CPU cores, set MAX_WORKERS = 8.
+If you have 8 CPU cores, set MAX_WORKERS = 10 (capped).
+If you have 16+ cores, test with MAX_WORKERS = 10+, but monitor performance.
+
+
+import multiprocessing
+print("CPU Cores Available:", multiprocessing.cpu_count())
+
+
+SELECT max_workers_count FROM sys.dm_os_sys_info;
+If result = 128, keep MAX_WORKERS ≤ 10 to avoid overloading SQL Server.
+2️⃣ Monitor CPU Usage During Migration
+
+Run Task Manager (Windows) → Performance Tab.
+If CPU is 100% usage, reduce MAX_WORKERS.
+If CPU is below 50%, increase MAX_WORKERS.
+
+
+SELECT * FROM sys.dm_exec_requests WHERE status = 'running';
+If many requests are waiting, reduce MAX_WORKERS.
+If SQL Server is handling the load well, increase MAX_WORKERS
+
+
+
+System Specs	Recommended MAX_WORKERS
+2 CPU Cores	MAX_WORKERS = 2-4
+4 CPU Cores	MAX_WORKERS = 6-8
+8 CPU Cores	MAX_WORKERS = 10
+16+ CPU Cores	MAX_WORKERS = 12+ (Test for optimal load)
