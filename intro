@@ -1,0 +1,22 @@
+Good morning & evening everyone, my name is vishal  and today I’m going to walk you through a quick demo.OUR DB is SQL Server DB and on screen is a  SP where all teh magic hapens and populates all the
+ancillary agents details like - N version( patch Bundle),Version, OS, AIT, Host, agents for both OS family - Linux & Windows. Like to emphasize this is for both core & Not core products at the bank.
+ancillary agents are supporting background processes or components that assist the main application or system. They can be Monitoring agents , backup agents & security agents 
+
+SO this is a Autosys Job which is one of the Ancillary agenst & we us ethis to schedule or run our SP. Typcically it takes a minute to run.
+Post rfers of DB, This is the UI or Tableau Dashboard which shows all of our results . 
+
+We neesd to provide host details for dashboard & filters to pulate. So this is our solution a one stop shop place where you can see all details of all ancillary agents in bank for Both OS Families.
+
+
+Good morning & evening everyone, my name is vishal  and today I’m going to walk you through a quick demo.
+OUR DB is SQL Server DB and on screen is a  python script which leverages pandas & Duck DB to take in tanium questions which i snothing but CSV files   and populate our DB with all the necessay linux commands results.
+
+we have anAutosys Job which i suse dto ppopuate thedtaa
+Post refersh of DB, This is the UI or Tableau Dashboard which shows all of the results . 
+
+We neesd to provide host details for dashboard & filters to pulate. 
+So this is our solution where Linux team donyt nee dto log into each server & exexute linux commands of boxes rather they can view all teh results in Tableau Dashboard
+
+Our SOlution leverage tanium question, a python script & Tableau Dashboard to show all the results.
+
+
